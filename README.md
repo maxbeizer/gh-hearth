@@ -13,15 +13,16 @@ gh extension install maxbeizer/gh-hearth
 ## Usage
 
 ```bash
-gh hearth
+gh hearth          # pure ASCII
+gh hearth --color  # true-color flames
 ```
 
 `Ctrl+C` to put it out.
 
 ## What It Does
 
-Full-screen terminal fireplace with true-color flames, glowing embers, and
-dynamic wind effects. Adapts to your terminal size.
+A terminal fireplace with flickering flame tongues, glowing logs, brick walls,
+and a mantel. Adapts to your terminal size.
 
 Inspired by [gh-screensaver](https://github.com/vilmibm/gh-screensaver).
 
