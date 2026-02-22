@@ -280,28 +280,74 @@ func main() {
 			}
 			sb.WriteByte('\n')
 
-			// Logs: two crossed logs made of ()= with ember gaps
+			// Top log row: three logs   (====)  (======)  (====)
 			sb.WriteString(strings.Repeat(" ", pad))
-			for i := 0; i < hearthW; i++ {
-				pos := float64(i) / float64(hearthW)
-				// Two log shapes crossing
-				onLog1 := math.Abs(pos-0.3) < 0.25
-				onLog2 := math.Abs(pos-0.7) < 0.25
-				if onLog1 || onLog2 {
-					if rand.Intn(6) == 0 {
-						// Ember glow in log cracks
-						ec := []byte{'*', ':', '+'}
-						sb.WriteByte(ec[rand.Intn(len(ec))])
-					} else {
-						lc := []byte{'(', ')', '=', '=', '0', 'O'}
-						sb.WriteByte(lc[rand.Intn(len(lc))])
+			logW := hearthW/4 - 2
+			if logW < 4 {
+				logW = 4
+			}
+			logGap := (hearthW - logW*3 - 6) / 4
+			if logGap < 1 {
+				logGap = 1
+			}
+			row := make([]byte, hearthW)
+			for i := range row {
+				row[i] = ' '
+			}
+			logStarts := []int{logGap, logGap*2 + logW + 2, logGap*3 + logW*2 + 4}
+			for _, s := range logStarts {
+				if s >= 0 && s < hearthW {
+					row[s] = '('
+				}
+				for j := 1; j <= logW; j++ {
+					if p := s + j; p >= 0 && p < hearthW {
+						if rand.Intn(7) == 0 {
+							row[p] = '*'
+						} else {
+							row[p] = '='
+						}
 					}
-				} else {
-					// Embers between logs
-					ec := []byte{'.', ',', ':', ' ', ' '}
-					sb.WriteByte(ec[rand.Intn(len(ec))])
+				}
+				if e := s + logW + 1; e >= 0 && e < hearthW {
+					row[e] = ')'
 				}
 			}
+			sb.Write(row)
+			sb.WriteByte('\n')
+
+			// Bottom log row: two wider logs, offset
+			sb.WriteString(strings.Repeat(" ", pad))
+			log2W := hearthW/3 - 2
+			if log2W < 5 {
+				log2W = 5
+			}
+			log2Gap := (hearthW - log2W*2 - 4) / 3
+			if log2Gap < 1 {
+				log2Gap = 1
+			}
+			row2 := make([]byte, hearthW)
+			for i := range row2 {
+				row2[i] = ' '
+			}
+			log2Starts := []int{log2Gap, log2Gap*2 + log2W + 2}
+			for _, s := range log2Starts {
+				if s >= 0 && s < hearthW {
+					row2[s] = '('
+				}
+				for j := 1; j <= log2W; j++ {
+					if p := s + j; p >= 0 && p < hearthW {
+						if rand.Intn(8) == 0 {
+							row2[p] = '*'
+						} else {
+							row2[p] = '='
+						}
+					}
+				}
+				if e := s + log2W + 1; e >= 0 && e < hearthW {
+					row2[e] = ')'
+				}
+			}
+			sb.Write(row2)
 			sb.WriteByte('\n')
 
 			// Stone hearth floor
