@@ -269,21 +269,50 @@ func main() {
 				sb.WriteByte('\n')
 			}
 
-			// Hearth base
+			// Hearth base: logs with glowing embers
 			pad := (fireW - hearthW) / 2
-			sb.WriteString(strings.Repeat(" ", pad))
-			sb.WriteString(strings.Repeat("_", hearthW))
-			sb.WriteByte('\n')
 
+			// Dense hot coals right at fire base
 			sb.WriteString(strings.Repeat(" ", pad))
-			emberChars := []byte{'.', ',', ':', ';', '\'', '`'}
+			coalChars := []byte{'#', '@', '%', '&', '*', '#', '@', '%'}
 			for i := 0; i < hearthW; i++ {
-				sb.WriteByte(emberChars[rand.Intn(len(emberChars))])
+				sb.WriteByte(coalChars[rand.Intn(len(coalChars))])
 			}
 			sb.WriteByte('\n')
 
+			// Logs: two crossed logs made of ()= with ember gaps
 			sb.WriteString(strings.Repeat(" ", pad))
-			sb.WriteString(strings.Repeat("=", hearthW))
+			for i := 0; i < hearthW; i++ {
+				pos := float64(i) / float64(hearthW)
+				// Two log shapes crossing
+				onLog1 := math.Abs(pos-0.3) < 0.25
+				onLog2 := math.Abs(pos-0.7) < 0.25
+				if onLog1 || onLog2 {
+					if rand.Intn(6) == 0 {
+						// Ember glow in log cracks
+						ec := []byte{'*', ':', '+'}
+						sb.WriteByte(ec[rand.Intn(len(ec))])
+					} else {
+						lc := []byte{'(', ')', '=', '=', '0', 'O'}
+						sb.WriteByte(lc[rand.Intn(len(lc))])
+					}
+				} else {
+					// Embers between logs
+					ec := []byte{'.', ',', ':', ' ', ' '}
+					sb.WriteByte(ec[rand.Intn(len(ec))])
+				}
+			}
+			sb.WriteByte('\n')
+
+			// Stone hearth floor
+			sb.WriteString(strings.Repeat(" ", pad))
+			for i := 0; i < hearthW; i++ {
+				if i%(8+rand.Intn(4)) == 0 {
+					sb.WriteByte('|')
+				} else {
+					sb.WriteByte('_')
+				}
+			}
 			sb.WriteByte('\n')
 
 			fmt.Print(sb.String())
