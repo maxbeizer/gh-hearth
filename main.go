@@ -10,7 +10,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	"unsafe"
+
+	"golang.org/x/term"
 )
 
 // Graduated from dense/hot to wispy/cool
@@ -38,22 +39,9 @@ var logColor = "\033[38;2;120;60;20m"
 var reset = "\033[0m"
 
 func termSize() (int, int) {
-	type winsize struct {
-		Row, Col, Xpixel, Ypixel uint16
-	}
-	var ws winsize
-	_, _, _ = syscall.Syscall(
-		syscall.SYS_IOCTL,
-		uintptr(syscall.Stdout),
-		uintptr(syscall.TIOCGWINSZ),
-		uintptr(unsafe.Pointer(&ws)),
-	)
-	w, h := int(ws.Col), int(ws.Row)
-	if w == 0 {
-		w = 80
-	}
-	if h == 0 {
-		h = 24
+	w, h, err := term.GetSize(int(os.Stdout.Fd()))
+	if err != nil || w == 0 || h == 0 {
+		return 80, 24
 	}
 	return w, h
 }
