@@ -79,23 +79,23 @@ func main() {
 	}
 	hearthLeft := (fireW - hearthW) / 2
 
-	// Create fewer, well-spaced flame tongues
-	numTongues := hearthW / 8
-	if numTongues < 3 {
-		numTongues = 3
+	// Flame tongues: more than final (denser) but fewer than before
+	numTongues := hearthW / 6
+	if numTongues < 4 {
+		numTongues = 4
 	}
-	if numTongues > 12 {
-		numTongues = 12
+	if numTongues > 15 {
+		numTongues = 15
 	}
 	tongues := make([]tongue, numTongues)
 	spacing := float64(hearthW) / float64(numTongues+1)
 	for i := range tongues {
 		tongues[i] = tongue{
-			x:         float64(hearthLeft) + spacing*float64(i+1) + (rand.Float64()-0.5)*spacing*0.4,
-			intensity: 0.6 + rand.Float64()*0.4,
-			speed:     0.06 + rand.Float64()*0.1,
+			x:         float64(hearthLeft) + spacing*float64(i+1) + (rand.Float64()-0.5)*spacing*0.3,
+			intensity: 0.55 + rand.Float64()*0.45,
+			speed:     0.07 + rand.Float64()*0.11,
 			phase:     rand.Float64() * math.Pi * 2,
-			width:     1.0 + rand.Float64()*1.5,
+			width:     1.2 + rand.Float64()*2.0,
 		}
 	}
 
@@ -123,22 +123,22 @@ func main() {
 					hearthLeft = (fireW - hearthW) / 2
 					buf = allocGrid(fireH, fireW)
 					sparks = allocGrid(fireH, fireW)
-					numTongues = hearthW / 8
-					if numTongues < 3 {
-						numTongues = 3
+					numTongues = hearthW / 6
+					if numTongues < 4 {
+						numTongues = 4
 					}
-					if numTongues > 12 {
-						numTongues = 12
+					if numTongues > 15 {
+						numTongues = 15
 					}
 					tongues = make([]tongue, numTongues)
 					spacing := float64(hearthW) / float64(numTongues+1)
 					for i := range tongues {
 						tongues[i] = tongue{
-							x:         float64(hearthLeft) + spacing*float64(i+1) + (rand.Float64()-0.5)*spacing*0.4,
-							intensity: 0.6 + rand.Float64()*0.4,
-							speed:     0.06 + rand.Float64()*0.1,
+							x:         float64(hearthLeft) + spacing*float64(i+1) + (rand.Float64()-0.5)*spacing*0.3,
+							intensity: 0.55 + rand.Float64()*0.45,
+							speed:     0.07 + rand.Float64()*0.11,
 							phase:     rand.Float64() * math.Pi * 2,
-							width:     1.0 + rand.Float64()*1.5,
+							width:     1.2 + rand.Float64()*2.0,
 						}
 					}
 					fmt.Print("\033[2J")
@@ -152,26 +152,26 @@ func main() {
 				buf[fireH-1][x] = 0
 			}
 
-			// Each tongue is a narrow gaussian heat source
+			// Each tongue is a gaussian heat source
 			t := float64(frame)
 			for _, tng := range tongues {
-				sway := math.Sin(t*tng.speed+tng.phase) * 3.0
+				sway := math.Sin(t*tng.speed+tng.phase) * 2.5
 				cx := tng.x + sway
-				pulse := tng.intensity * (0.5 + 0.5*math.Sin(t*tng.speed*2.3+tng.phase))
+				pulse := tng.intensity * (0.6 + 0.4*math.Sin(t*tng.speed*2.0+tng.phase))
 
 				for x := hearthLeft; x < hearthRight; x++ {
 					dist := (float64(x) - cx) / tng.width
-					heat := pulse * math.Exp(-dist*dist*0.5)
+					heat := pulse * math.Exp(-dist*dist*0.7)
 					if heat > 0.05 {
 						buf[fireH-1][x] = clamp(buf[fireH-1][x]+heat, 0, 1)
 					}
 				}
 			}
 
-			// Light baseline warmth - just enough to connect at base
+			// Moderate baseline warmth
 			for x := hearthLeft; x < hearthRight; x++ {
 				dist := math.Abs(float64(x)-float64(hearthLeft+hearthW/2)) / float64(hearthW/2)
-				base := 0.15 * math.Exp(-dist*dist*1.5)
+				base := 0.2 * math.Exp(-dist*dist*1.8)
 				buf[fireH-1][x] = clamp(buf[fireH-1][x]+base, 0, 1)
 			}
 
@@ -213,14 +213,14 @@ func main() {
 					cool := 0.04 + (1.0-heightRatio)*0.04 + rand.Float64()*0.025
 
 					// Random extinction for ragged edges
-					if rand.Intn(12) == 0 {
-						cool += 0.15
+					if rand.Intn(10) == 0 {
+						cool += 0.12
 					}
 
 					val := clamp(avg-cool, 0, 1)
 
-					// Cull low-heat pixels for sparse wispy tips
-					if val < 0.15 && rand.Intn(3) != 0 {
+					// Cull low-heat pixels for wispy tips
+					if val < 0.12 && rand.Intn(3) != 0 {
 						val = 0
 					}
 
