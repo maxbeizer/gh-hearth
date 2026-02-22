@@ -50,9 +50,18 @@ func main() {
 
 	termW, termH := termSize()
 	fireW := termW
-	fireH := termH - 4
-	if fireH < 10 {
-		fireH = 10
+	// Fireplace opening dimensions
+	fpW := termW * 2 / 3
+	if fpW > 80 {
+		fpW = 80
+	}
+	fpLeft := (termW - fpW) / 2
+	// Wall thickness
+	wallW := 4
+	// Fire zone is inside the walls
+	fireH := termH - 8 // mantel(2) + logs(2) + hearth(1) + floor(1) + margins
+	if fireH < 8 {
+		fireH = 8
 	}
 
 	fmt.Print("\033[?25l\033[2J")
@@ -73,11 +82,8 @@ func main() {
 		width     float64
 	}
 
-	hearthW := fireW * 2 / 3
-	if hearthW > 80 {
-		hearthW = 80
-	}
-	hearthLeft := (fireW - hearthW) / 2
+	hearthW := fpW - wallW*2
+	hearthLeft := fpLeft + wallW
 
 	// Flame tongues: more than final (denser) but fewer than before
 	numTongues := hearthW / 6
@@ -112,15 +118,17 @@ func main() {
 				if newW != termW || newH != termH {
 					termW, termH = newW, newH
 					fireW = termW
-					fireH = termH - 4
-					if fireH < 10 {
-						fireH = 10
+					fpW = termW * 2 / 3
+					if fpW > 80 {
+						fpW = 80
 					}
-					hearthW = fireW * 2 / 3
-					if hearthW > 80 {
-						hearthW = 80
+					fpLeft = (termW - fpW) / 2
+					fireH = termH - 8
+					if fireH < 8 {
+						fireH = 8
 					}
-					hearthLeft = (fireW - hearthW) / 2
+					hearthW = fpW - wallW*2
+					hearthLeft = fpLeft + wallW
 					buf = allocGrid(fireH, fireW)
 					sparks = allocGrid(fireH, fireW)
 					numTongues = hearthW / 6
@@ -252,36 +260,74 @@ func main() {
 
 			// Render
 			var sb strings.Builder
-			sb.Grow(fireW * fireH * 2)
+			sb.Grow(fireW * (fireH + 10) * 3)
 			sb.WriteString("\033[H")
 
+			// Mantel
+			sb.WriteString(strings.Repeat(" ", fpLeft))
+			sb.WriteByte(' ')
+			sb.WriteString(strings.Repeat("_", fpW-2))
+			sb.WriteByte(' ')
+			sb.WriteByte('\n')
+
+			sb.WriteString(strings.Repeat(" ", fpLeft))
+			sb.WriteByte('|')
+			sb.WriteString(strings.Repeat("_", fpW-2))
+			sb.WriteByte('|')
+			sb.WriteByte('\n')
+
+			// Fire rows with brick walls
 			for y := 0; y < fireH; y++ {
-				for x := 0; x < fireW; x++ {
-					heat := buf[y][x]
-					if heat < 0.03 {
-						sb.WriteByte(' ')
-						continue
+				sb.WriteString(strings.Repeat(" ", fpLeft))
+				// Left wall - alternating brick pattern
+				if y%2 == 0 {
+					sb.WriteString("|__|")
+				} else {
+					sb.WriteString("|_|_")
+				}
+				// Fire area
+				for x := hearthLeft; x < hearthLeft+hearthW; x++ {
+					if x >= 0 && x < fireW {
+						heat := buf[y][x]
+						if heat < 0.03 {
+							sb.WriteByte(' ')
+							continue
+						}
+						fi := int((1.0 - heat) * float64(len(fireChars)-1))
+						fi = clampInt(fi, 0, len(fireChars)-1)
+						sb.WriteByte(fireChars[fi])
 					}
-					fi := int((1.0 - heat) * float64(len(fireChars)-1))
-					fi = clampInt(fi, 0, len(fireChars)-1)
-					sb.WriteByte(fireChars[fi])
+				}
+				// Right wall
+				if y%2 == 0 {
+					sb.WriteString("|__|")
+				} else {
+					sb.WriteString("_|_|")
 				}
 				sb.WriteByte('\n')
 			}
 
-			// Hearth base: logs with glowing embers
-			pad := (fireW - hearthW) / 2
-
-			// Dense hot coals right at fire base
-			sb.WriteString(strings.Repeat(" ", pad))
+			// Coals row with walls
+			sb.WriteString(strings.Repeat(" ", fpLeft))
+			if fireH%2 == 0 {
+				sb.WriteString("|__|")
+			} else {
+				sb.WriteString("|_|_")
+			}
 			coalChars := []byte{'#', '@', '%', '&', '*', '#', '@', '%'}
 			for i := 0; i < hearthW; i++ {
 				sb.WriteByte(coalChars[rand.Intn(len(coalChars))])
 			}
+			if fireH%2 == 0 {
+				sb.WriteString("|__|")
+			} else {
+				sb.WriteString("_|_|")
+			}
 			sb.WriteByte('\n')
 
-			// Top log row: three logs   (====)  (======)  (====)
-			sb.WriteString(strings.Repeat(" ", pad))
+			// Top log row with walls
+			sb.WriteString(strings.Repeat(" ", fpLeft))
+			sb.WriteString("|__|")
 			logW := hearthW/4 - 2
 			if logW < 4 {
 				logW = 4
@@ -313,10 +359,12 @@ func main() {
 				}
 			}
 			sb.Write(row)
+			sb.WriteString("|__|")
 			sb.WriteByte('\n')
 
-			// Bottom log row: two wider logs, offset
-			sb.WriteString(strings.Repeat(" ", pad))
+			// Bottom log row with walls
+			sb.WriteString(strings.Repeat(" ", fpLeft))
+			sb.WriteString("|_|_")
 			log2W := hearthW/3 - 2
 			if log2W < 5 {
 				log2W = 5
@@ -348,17 +396,14 @@ func main() {
 				}
 			}
 			sb.Write(row2)
+			sb.WriteString("_|_|")
 			sb.WriteByte('\n')
 
-			// Stone hearth floor
-			sb.WriteString(strings.Repeat(" ", pad))
-			for i := 0; i < hearthW; i++ {
-				if i%(8+rand.Intn(4)) == 0 {
-					sb.WriteByte('|')
-				} else {
-					sb.WriteByte('_')
-				}
-			}
+			// Hearth floor
+			sb.WriteString(strings.Repeat(" ", fpLeft))
+			sb.WriteByte('|')
+			sb.WriteString(strings.Repeat("_", fpW-2))
+			sb.WriteByte('|')
 			sb.WriteByte('\n')
 
 			fmt.Print(sb.String())
