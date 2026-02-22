@@ -12,8 +12,8 @@ import (
 	"unsafe"
 )
 
-// Denser chars at bottom, wispy at top
-var fireChars = []byte{'#', '#', '@', '%', '&', '*', '+', '=', ':', '~', '-', '.', '`', ' '}
+// Graduated from dense/hot to wispy/cool
+var fireChars = []byte{'#', '@', '%', '&', '*', '+', ':', '~', '-', '.', '`'}
 
 func termSize() (int, int) {
 	type winsize struct {
@@ -79,19 +79,23 @@ func main() {
 	}
 	hearthLeft := (fireW - hearthW) / 2
 
-	// Create several flame tongues across the hearth
-	numTongues := hearthW / 4
-	if numTongues < 5 {
-		numTongues = 5
+	// Create fewer, well-spaced flame tongues
+	numTongues := hearthW / 8
+	if numTongues < 3 {
+		numTongues = 3
+	}
+	if numTongues > 12 {
+		numTongues = 12
 	}
 	tongues := make([]tongue, numTongues)
+	spacing := float64(hearthW) / float64(numTongues+1)
 	for i := range tongues {
 		tongues[i] = tongue{
-			x:         float64(hearthLeft) + float64(i)*float64(hearthW)/float64(numTongues) + rand.Float64()*3,
-			intensity: 0.5 + rand.Float64()*0.5,
-			speed:     0.08 + rand.Float64()*0.12,
+			x:         float64(hearthLeft) + spacing*float64(i+1) + (rand.Float64()-0.5)*spacing*0.4,
+			intensity: 0.6 + rand.Float64()*0.4,
+			speed:     0.06 + rand.Float64()*0.1,
 			phase:     rand.Float64() * math.Pi * 2,
-			width:     1.5 + rand.Float64()*2.5,
+			width:     1.0 + rand.Float64()*1.5,
 		}
 	}
 
@@ -119,18 +123,22 @@ func main() {
 					hearthLeft = (fireW - hearthW) / 2
 					buf = allocGrid(fireH, fireW)
 					sparks = allocGrid(fireH, fireW)
-					numTongues = hearthW / 4
-					if numTongues < 5 {
-						numTongues = 5
+					numTongues = hearthW / 8
+					if numTongues < 3 {
+						numTongues = 3
+					}
+					if numTongues > 12 {
+						numTongues = 12
 					}
 					tongues = make([]tongue, numTongues)
+					spacing := float64(hearthW) / float64(numTongues+1)
 					for i := range tongues {
 						tongues[i] = tongue{
-							x:         float64(hearthLeft) + float64(i)*float64(hearthW)/float64(numTongues) + rand.Float64()*3,
-							intensity: 0.5 + rand.Float64()*0.5,
-							speed:     0.08 + rand.Float64()*0.12,
+							x:         float64(hearthLeft) + spacing*float64(i+1) + (rand.Float64()-0.5)*spacing*0.4,
+							intensity: 0.6 + rand.Float64()*0.4,
+							speed:     0.06 + rand.Float64()*0.1,
 							phase:     rand.Float64() * math.Pi * 2,
-							width:     1.5 + rand.Float64()*2.5,
+							width:     1.0 + rand.Float64()*1.5,
 						}
 					}
 					fmt.Print("\033[2J")
@@ -144,27 +152,27 @@ func main() {
 				buf[fireH-1][x] = 0
 			}
 
-			// Each tongue contributes a gaussian heat bump
+			// Each tongue is a narrow gaussian heat source
 			t := float64(frame)
 			for _, tng := range tongues {
-				// Tongues sway side to side
-				sway := math.Sin(t*tng.speed+tng.phase) * 2.0
+				sway := math.Sin(t*tng.speed+tng.phase) * 3.0
 				cx := tng.x + sway
-				// Pulsing intensity
-				pulse := tng.intensity * (0.7 + 0.3*math.Sin(t*tng.speed*1.7+tng.phase))
+				pulse := tng.intensity * (0.5 + 0.5*math.Sin(t*tng.speed*2.3+tng.phase))
 
 				for x := hearthLeft; x < hearthRight; x++ {
 					dist := (float64(x) - cx) / tng.width
-					heat := pulse * math.Exp(-dist*dist)
-					buf[fireH-1][x] = clamp(buf[fireH-1][x]+heat, 0, 1)
+					heat := pulse * math.Exp(-dist*dist*0.5)
+					if heat > 0.05 {
+						buf[fireH-1][x] = clamp(buf[fireH-1][x]+heat, 0, 1)
+					}
 				}
 			}
 
-			// Add some baseline warmth across hearth and jitter
+			// Light baseline warmth - just enough to connect at base
 			for x := hearthLeft; x < hearthRight; x++ {
 				dist := math.Abs(float64(x)-float64(hearthLeft+hearthW/2)) / float64(hearthW/2)
-				base := 0.3 * math.Exp(-dist*dist*2.0)
-				buf[fireH-1][x] = clamp(buf[fireH-1][x]+base+(rand.Float64()-0.5)*0.15, 0, 1)
+				base := 0.15 * math.Exp(-dist*dist*1.5)
+				buf[fireH-1][x] = clamp(buf[fireH-1][x]+base, 0, 1)
 			}
 
 			// Sparks - small bright dots that fly up
@@ -176,57 +184,69 @@ func main() {
 				}
 			}
 
-			// Propagate upward - key to flame shape
+			// Propagate upward - strongly vertical
 			for y := 0; y < fireH-1; y++ {
 				for x := 0; x < fireW; x++ {
-					// Tight vertical kernel - flames go UP, not sideways
-					sum := buf[y+1][x] * 3.0
-					count := 3.0
+					// Heavy center weight = flames go straight up
+					sum := buf[y+1][x] * 5.0
+					count := 5.0
 					if x > 0 {
-						sum += buf[y+1][x-1] * 0.5
-						count += 0.5
+						sum += buf[y+1][x-1] * 0.3
+						count += 0.3
 					}
 					if x < fireW-1 {
-						sum += buf[y+1][x+1] * 0.5
-						count += 0.5
+						sum += buf[y+1][x+1] * 0.3
+						count += 0.3
 					}
 					avg := sum / count
 
-					// Gentle wind sway
-					windDrift := math.Sin(t*0.05+float64(y)*0.3) * 0.8
+					// Gentle sway
+					windDrift := math.Sin(t*0.04+float64(y)*0.25) * 0.6
 					drift := int(math.Round(windDrift))
-					dx := clampInt(x+drift, 0, fireW-1)
-					avg = (avg*3 + buf[y+1][dx]) / 4.0
-
-					// Cooling: gentle near base, aggressive near top
-					heightRatio := float64(y) / float64(fireH) // 0 at top, 1 at bottom
-					cool := 0.04 + (1.0-heightRatio)*0.05 + rand.Float64()*0.03
-					// Random extra cooling creates ragged edges
-					if rand.Intn(8) == 0 {
-						cool += 0.1
+					if drift != 0 {
+						dx := clampInt(x+drift, 0, fireW-1)
+						avg = (avg*4 + buf[y+1][dx]) / 5.0
 					}
-					buf[y][x] = clamp(avg-cool, 0, 1)
+
+					// Cooling
+					heightRatio := float64(y) / float64(fireH)
+					cool := 0.04 + (1.0-heightRatio)*0.04 + rand.Float64()*0.025
+
+					// Random extinction for ragged edges
+					if rand.Intn(12) == 0 {
+						cool += 0.15
+					}
+
+					val := clamp(avg-cool, 0, 1)
+
+					// Cull low-heat pixels for sparse wispy tips
+					if val < 0.15 && rand.Intn(3) != 0 {
+						val = 0
+					}
+
+					buf[y][x] = val
 
 					// Sparks
 					if sparks[y][x] > 0 {
 						buf[y][x] = clamp(buf[y][x]+sparks[y][x], 0, 1)
-						sparks[y][x] *= 0.4
+						sparks[y][x] *= 0.35
 						if sparks[y][x] < 0.03 {
 							sparks[y][x] = 0
 						}
 						if y > 0 {
-							sparks[y-1][x] = clamp(sparks[y-1][x]+sparks[y][x]*0.6, 0, 1)
+							sparks[y-1][x] = clamp(sparks[y-1][x]+sparks[y][x]*0.5, 0, 1)
 						}
 					}
 				}
 			}
 
-			// Slowly drift tongue positions for variety
-			if frame%10 == 0 {
+			// Drift tongue positions slowly
+			if frame%15 == 0 {
 				for i := range tongues {
-					tongues[i].x += (rand.Float64() - 0.5) * 0.5
-					tongues[i].x = clamp(tongues[i].x, float64(hearthLeft+1), float64(hearthRight-2))
-					tongues[i].intensity = clamp(tongues[i].intensity+(rand.Float64()-0.5)*0.1, 0.3, 1.0)
+					tongues[i].x += (rand.Float64() - 0.5) * 0.8
+					tongues[i].x = clamp(tongues[i].x, float64(hearthLeft+2), float64(hearthRight-3))
+					tongues[i].intensity = clamp(tongues[i].intensity+(rand.Float64()-0.5)*0.08, 0.4, 1.0)
+					tongues[i].width = clamp(tongues[i].width+(rand.Float64()-0.5)*0.2, 0.8, 2.5)
 				}
 			}
 
@@ -238,7 +258,7 @@ func main() {
 			for y := 0; y < fireH; y++ {
 				for x := 0; x < fireW; x++ {
 					heat := buf[y][x]
-					if heat < 0.02 {
+					if heat < 0.03 {
 						sb.WriteByte(' ')
 						continue
 					}
