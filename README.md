@@ -1,6 +1,6 @@
 # 🔥 gh-hearth
 
-A roaring fire for your terminal. Because sometimes you just need to sit by the hearth.
+A cozy fire for your terminal.
 
 ![demo](demo.gif)
 
@@ -16,17 +16,12 @@ gh extension install maxbeizer/gh-hearth
 gh hearth
 ```
 
-Press `Ctrl+C` to extinguish.
+`Ctrl+C` to put it out.
 
 ## What It Does
 
-Renders an ASCII art fire with:
-- Procedural flame propagation with heat diffusion
-- Organic sine-wave flicker
-- Color palette from ember to white-hot
-- Cooler edges, hotter center
-
-No dependencies. No config. Just warmth.
+Pure ASCII. No colors, no dependencies. Just `.` `:` `*` `^` `~` doing their best
+to keep you warm.
 
 ## Uninstall
 

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"math"
 	"math/rand"
 	"os"
 	"os/signal"
@@ -12,157 +11,131 @@ import (
 )
 
 const (
-	width  = 60
-	height = 25
+	width  = 40
+	height = 18
 )
 
-// Fire palette from dark to bright
-var palette = []string{
-	"\033[38;2;20;0;0m",   // near-black red
-	"\033[38;2;80;10;0m",  // dark red
-	"\033[38;2;150;30;0m", // red
-	"\033[38;2;200;60;0m", // orange-red
-	"\033[38;2;220;120;0m",// orange
-	"\033[38;2;240;180;20m",// yellow-orange
-	"\033[38;2;255;220;80m",// yellow
-	"\033[38;2;255;255;180m",// bright yellow
-	"\033[38;2;255;255;255m",// white-hot
-}
-
-var chars = []rune{'░', '▒', '▓', '█', '▓', '▒', '░', ' '}
-
-var reset = "\033[0m"
+// Lo-fi: just a few ASCII chars, hottest to coolest
+var chars = []byte{'.', ':', '*', '^', '~', ' '}
 
 func main() {
-	// Handle exit gracefully
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
-	// Hide cursor
-	fmt.Print("\033[?25l")
+	fmt.Print("\033[?25l\033[2J") // hide cursor, clear screen
 	defer fmt.Print("\033[?25h\033[0m\n")
 
-	// Fire buffer (bottom row is hottest)
+	// Heat buffer: 0.0 = cold, 1.0 = hot
 	buf := make([][]float64, height)
 	for i := range buf {
 		buf[i] = make([]float64, width)
 	}
 
-	ticker := time.NewTicker(60 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
-	frame := 0
 	for {
 		select {
 		case <-sig:
 			return
 		case <-ticker.C:
-			// Seed bottom rows with heat
+			// Seed the bottom row
 			for x := 0; x < width; x++ {
-				// Base heat with variation
-				heat := 0.7 + rand.Float64()*0.3
-				// Occasional flare-ups
-				if rand.Float64() < 0.1 {
-					heat = 1.0
-				}
-				// Cooler edges
-				edgeDist := float64(min(x, width-1-x)) / float64(width/2)
-				heat *= 0.4 + 0.6*edgeDist
-				buf[height-1][x] = heat
-				buf[height-2][x] = heat * (0.8 + rand.Float64()*0.2)
+				// Hotter in the middle, cooler at edges
+				center := float64(width) / 2
+				dist := abs(float64(x) - center) / center
+				base := 1.0 - dist*0.6
+				jitter := (rand.Float64() - 0.5) * 0.4
+				buf[height-1][x] = clamp(base+jitter, 0, 1)
 			}
 
-			// Propagate fire upward with cooling and spread
-			for y := 0; y < height-2; y++ {
+			// Propagate upward: each cell averages neighbors below + cools
+			for y := 0; y < height-1; y++ {
 				for x := 0; x < width; x++ {
-					// Sample from below with random horizontal spread
-					spread := rand.Intn(3) - 1
-					sx := clamp(x+spread, 0, width-1)
-					// Average of neighbors below
-					heat := buf[y+1][sx]
+					below := buf[y+1][x]
+					left := below
+					right := below
 					if x > 0 {
-						heat += buf[y+1][x-1]
-					} else {
-						heat += buf[y+1][x]
+						left = buf[y+1][x-1]
 					}
 					if x < width-1 {
-						heat += buf[y+1][x+1]
-					} else {
-						heat += buf[y+1][x]
+						right = buf[y+1][x+1]
 					}
-					heat += buf[y+2][sx]
-					heat /= 4.0
+					// Slight random horizontal drift
+					drift := rand.Intn(3) - 1
+					dx := clampInt(x+drift, 0, width-1)
+					avg := (below + left + right + buf[y+1][dx]) / 4.0
 
-					// Cool as it rises — more cooling near top
-					coolFactor := 0.94 - float64(height-1-y)*0.003
-					// Add flicker
-					flicker := 1.0 + (rand.Float64()-0.5)*0.1
-					heat *= coolFactor * flicker
-
-					// Sine wave for organic movement
-					wave := math.Sin(float64(frame)*0.05+float64(x)*0.15) * 0.03
-					heat += wave
-
-					buf[y][x] = clamp64(heat, 0, 1)
+					// Cool as it rises
+					cool := 0.15 + rand.Float64()*0.08
+					buf[y][x] = clamp(avg-cool, 0, 1)
 				}
 			}
 
 			// Render
 			var sb strings.Builder
-			sb.WriteString("\033[H") // Move cursor to top-left
+			sb.WriteString("\033[H")
+
+			// Some top padding
+			sb.WriteString("\n\n")
 
 			for y := 0; y < height; y++ {
+				// Center the fire
+				sb.WriteString("                    ")
 				for x := 0; x < width; x++ {
 					heat := buf[y][x]
 					if heat < 0.05 {
-						sb.WriteRune(' ')
-						continue
+						sb.WriteByte(' ')
+					} else {
+						idx := int((1.0 - heat) * float64(len(chars)-1))
+						if idx < 0 {
+							idx = 0
+						}
+						if idx >= len(chars) {
+							idx = len(chars) - 1
+						}
+						sb.WriteByte(chars[idx])
 					}
-					// Map heat to palette
-					idx := int(heat * float64(len(palette)-1))
-					idx = clamp(idx, 0, len(palette)-1)
-					// Map heat to char
-					cidx := int((1.0 - heat) * float64(len(chars)-1))
-					cidx = clamp(cidx, 0, len(chars)-1)
-
-					sb.WriteString(palette[idx])
-					sb.WriteRune(chars[cidx])
 				}
-				sb.WriteString(reset)
-				sb.WriteRune('\n')
+				sb.WriteByte('\n')
 			}
 
-			// Fireplace base
-			sb.WriteString("\033[38;2;100;80;60m")
-			sb.WriteString(strings.Repeat("━", width))
-			sb.WriteString(reset + "\n")
-
-			// Branding
-			sb.WriteString("\033[38;2;180;140;100m")
-			pad := (width - 22) / 2
-			sb.WriteString(strings.Repeat(" ", pad))
-			sb.WriteString("🔥  gh hearth  v0.1.0")
-			sb.WriteString(reset)
+			// Logs / base
+			sb.WriteString("                    ")
+			sb.WriteString("________________________________________\n")
+			sb.WriteString("                    ")
+			sb.WriteString("   ===[]========[]====[]========[]===   \n")
+			sb.WriteString("\n")
+			sb.WriteString("                          gh hearth\n")
 
 			fmt.Print(sb.String())
-			frame++
 		}
 	}
 }
 
-func clamp(v, lo, hi int) int {
-	if v < lo { return lo }
-	if v > hi { return hi }
+func abs(x float64) float64 {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+func clamp(v, lo, hi float64) float64 {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
 	return v
 }
 
-func clamp64(v, lo, hi float64) float64 {
-	if v < lo { return lo }
-	if v > hi { return hi }
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
 	return v
-}
-
-func min(a, b int) int {
-	if a < b { return a }
-	return b
 }

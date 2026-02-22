@@ -1,14 +1,14 @@
 Output demo.gif
 Set Shell bash
-Set FontSize 14
-Set Width 900
-Set Height 600
+Set FontSize 15
+Set Width 800
+Set Height 550
 Set Theme "Catppuccin Mocha"
-Set Padding 10
+Set Padding 15
 
 Type "gh hearth"
-Sleep 500ms
+Sleep 400ms
 Enter
-Sleep 8s
+Sleep 10s
 Ctrl+C
-Sleep 1s
+Sleep 500ms
