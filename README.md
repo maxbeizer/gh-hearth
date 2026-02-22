@@ -20,8 +20,10 @@ gh hearth
 
 ## What It Does
 
-Pure ASCII. No colors, no dependencies. Just `.` `:` `*` `^` `~` doing their best
-to keep you warm.
+Full-screen terminal fireplace with true-color flames, glowing embers, and
+dynamic wind effects. Adapts to your terminal size.
+
+Inspired by [gh-screensaver](https://github.com/vilmibm/gh-screensaver).
 
 ## Uninstall
 
