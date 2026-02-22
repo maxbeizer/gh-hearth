@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"math"
 	"math/rand"
@@ -14,6 +15,27 @@ import (
 
 // Graduated from dense/hot to wispy/cool
 var fireChars = []byte{'#', '@', '%', '&', '*', '+', ':', '~', '-', '.', '`'}
+
+// Color palette: white-hot -> yellow -> orange -> red -> dark red
+var palette = []string{
+	"\033[38;2;255;255;255m", // white-hot core
+	"\033[38;2;255;255;180m", // bright yellow-white
+	"\033[38;2;255;240;80m",  // yellow
+	"\033[38;2;255;200;30m",  // golden
+	"\033[38;2;255;160;0m",   // amber
+	"\033[38;2;255;120;0m",   // orange
+	"\033[38;2;240;70;0m",    // deep orange
+	"\033[38;2;210;30;0m",    // red-orange
+	"\033[38;2;180;15;0m",    // red
+	"\033[38;2;130;5;0m",     // dark red
+	"\033[38;2;80;2;0m",      // ember
+}
+
+var brickColor = "\033[38;2;140;70;30m"
+var mantelColor = "\033[38;2;100;55;25m"
+var coalColor = "\033[38;2;200;80;10m"
+var logColor = "\033[38;2;120;60;20m"
+var reset = "\033[0m"
 
 func termSize() (int, int) {
 	type winsize struct {
@@ -45,6 +67,10 @@ func allocGrid(h, w int) [][]float64 {
 }
 
 func main() {
+	colorFlag := flag.Bool("color", false, "enable true-color flames")
+	flag.Parse()
+	useColor := *colorFlag
+
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM)
 
@@ -58,10 +84,14 @@ func main() {
 	fpLeft := (termW - fpW) / 2
 	// Wall thickness
 	wallW := 4
-	// Fire zone is inside the walls
-	fireH := termH - 8 // mantel(2) + logs(2) + hearth(1) + floor(1) + margins
+	// Fire zone: cap height so mantel sits just above flames
+	maxFireH := 20
+	fireH := termH - 8
 	if fireH < 8 {
 		fireH = 8
+	}
+	if fireH > maxFireH {
+		fireH = maxFireH
 	}
 
 	fmt.Print("\033[?25l\033[2J")
@@ -126,6 +156,9 @@ func main() {
 					fireH = termH - 8
 					if fireH < 8 {
 						fireH = 8
+					}
+					if fireH > maxFireH {
+						fireH = maxFireH
 					}
 					hearthW = fpW - wallW*2
 					hearthLeft = fpLeft + wallW
@@ -260,74 +293,135 @@ func main() {
 
 			// Render
 			var sb strings.Builder
-			sb.Grow(fireW * (fireH + 10) * 3)
+			sb.Grow(fireW * (fireH + 10) * 6)
 			sb.WriteString("\033[H")
+
+			// Vertical centering: pad top if fireplace is shorter than terminal
+			totalH := 2 + fireH + 4 // mantel(2) + fire + coals + logs(2) + floor
+			topPad := (termH - totalH) / 2
+			if topPad < 0 {
+				topPad = 0
+			}
+			for i := 0; i < topPad; i++ {
+				sb.WriteString(strings.Repeat(" ", termW))
+				sb.WriteByte('\n')
+			}
 
 			// Mantel
 			sb.WriteString(strings.Repeat(" ", fpLeft))
+			if useColor {
+				sb.WriteString(mantelColor)
+			}
 			sb.WriteByte(' ')
 			sb.WriteString(strings.Repeat("_", fpW-2))
 			sb.WriteByte(' ')
+			if useColor {
+				sb.WriteString(reset)
+			}
 			sb.WriteByte('\n')
 
 			sb.WriteString(strings.Repeat(" ", fpLeft))
+			if useColor {
+				sb.WriteString(mantelColor)
+			}
 			sb.WriteByte('|')
 			sb.WriteString(strings.Repeat("_", fpW-2))
 			sb.WriteByte('|')
+			if useColor {
+				sb.WriteString(reset)
+			}
 			sb.WriteByte('\n')
 
 			// Fire rows with brick walls
 			for y := 0; y < fireH; y++ {
 				sb.WriteString(strings.Repeat(" ", fpLeft))
-				// Left wall - alternating brick pattern
+				// Left wall
+				if useColor {
+					sb.WriteString(brickColor)
+				}
 				if y%2 == 0 {
 					sb.WriteString("|__|")
 				} else {
 					sb.WriteString("|_|_")
+				}
+				if useColor {
+					sb.WriteString(reset)
 				}
 				// Fire area
 				for x := hearthLeft; x < hearthLeft+hearthW; x++ {
 					if x >= 0 && x < fireW {
 						heat := buf[y][x]
 						if heat < 0.03 {
+							if useColor {
+								sb.WriteString(reset)
+							}
 							sb.WriteByte(' ')
 							continue
 						}
 						fi := int((1.0 - heat) * float64(len(fireChars)-1))
 						fi = clampInt(fi, 0, len(fireChars)-1)
+						if useColor {
+							ci := int((1.0 - heat) * float64(len(palette)-1))
+							ci = clampInt(ci, 0, len(palette)-1)
+							sb.WriteString(palette[ci])
+						}
 						sb.WriteByte(fireChars[fi])
 					}
 				}
 				// Right wall
+				if useColor {
+					sb.WriteString(brickColor)
+				}
 				if y%2 == 0 {
 					sb.WriteString("|__|")
 				} else {
 					sb.WriteString("_|_|")
+				}
+				if useColor {
+					sb.WriteString(reset)
 				}
 				sb.WriteByte('\n')
 			}
 
 			// Coals row with walls
 			sb.WriteString(strings.Repeat(" ", fpLeft))
+			if useColor {
+				sb.WriteString(brickColor)
+			}
 			if fireH%2 == 0 {
 				sb.WriteString("|__|")
 			} else {
 				sb.WriteString("|_|_")
 			}
+			if useColor {
+				sb.WriteString(coalColor)
+			}
 			coalChars := []byte{'#', '@', '%', '&', '*', '#', '@', '%'}
 			for i := 0; i < hearthW; i++ {
 				sb.WriteByte(coalChars[rand.Intn(len(coalChars))])
+			}
+			if useColor {
+				sb.WriteString(brickColor)
 			}
 			if fireH%2 == 0 {
 				sb.WriteString("|__|")
 			} else {
 				sb.WriteString("_|_|")
 			}
+			if useColor {
+				sb.WriteString(reset)
+			}
 			sb.WriteByte('\n')
 
 			// Top log row with walls
 			sb.WriteString(strings.Repeat(" ", fpLeft))
+			if useColor {
+				sb.WriteString(brickColor)
+			}
 			sb.WriteString("|__|")
+			if useColor {
+				sb.WriteString(logColor)
+			}
 			logW := hearthW/4 - 2
 			if logW < 4 {
 				logW = 4
@@ -359,12 +453,24 @@ func main() {
 				}
 			}
 			sb.Write(row)
+			if useColor {
+				sb.WriteString(brickColor)
+			}
 			sb.WriteString("|__|")
+			if useColor {
+				sb.WriteString(reset)
+			}
 			sb.WriteByte('\n')
 
 			// Bottom log row with walls
 			sb.WriteString(strings.Repeat(" ", fpLeft))
+			if useColor {
+				sb.WriteString(brickColor)
+			}
 			sb.WriteString("|_|_")
+			if useColor {
+				sb.WriteString(logColor)
+			}
 			log2W := hearthW/3 - 2
 			if log2W < 5 {
 				log2W = 5
@@ -396,14 +502,26 @@ func main() {
 				}
 			}
 			sb.Write(row2)
+			if useColor {
+				sb.WriteString(brickColor)
+			}
 			sb.WriteString("_|_|")
+			if useColor {
+				sb.WriteString(reset)
+			}
 			sb.WriteByte('\n')
 
 			// Hearth floor
 			sb.WriteString(strings.Repeat(" ", fpLeft))
+			if useColor {
+				sb.WriteString(mantelColor)
+			}
 			sb.WriteByte('|')
 			sb.WriteString(strings.Repeat("_", fpW-2))
 			sb.WriteByte('|')
+			if useColor {
+				sb.WriteString(reset)
+			}
 			sb.WriteByte('\n')
 
 			fmt.Print(sb.String())
